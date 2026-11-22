@@ -2,6 +2,7 @@ package dev.belegagent.app;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.modulith.Modulithic;
 
 /**
@@ -11,6 +12,7 @@ import org.springframework.modulith.Modulithic;
  */
 @Modulithic(systemName = "Beleg-Agent")
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class BelegAgentApplication {
 
     public static void main(String[] args) {

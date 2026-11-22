@@ -30,4 +30,13 @@ From the host: API 18080, worker 18081, PostgreSQL 15432, MinIO 19000 (console 1
 - `ModularityTests` must stay green: modules talk via events or exposed APIs only.
 
 ## Current phase
-Phase 0 (setup) done. Next: Phase 1, basic extraction (upload → MinIO → `Beleg`/`Position` records via LangChain4j + Gemini; model chosen by config).
+Phase 0 and Phase 1 done: `POST /api/documents` (multipart, magic-byte check, SHA-256 dedup per tenant) → MinIO + `document` row →
+worker claims with `FOR UPDATE SKIP LOCKED` → `BelegExtractionService` (PDFBox render → Gemini, JSON schema) → append-only `extraction` row →
+`GET /api/documents/{id}/extraction`. No retry yet (failure = FAILED).
+Next: Phase 2, evals (ZUGFeRD trick: compare extraction with the XML embedded in the same PDF).
+
+## Gotchas
+- Spring Boot 4 uses Jackson 3 (`tools.jackson.*`); annotations stay `com.fasterxml.jackson.annotation`. LangChain4j uses Jackson 2 internally.
+- LangChain4j's JSON schema has no `LocalDate`: model-facing records (`extraction.llm.Extracted*`) use strings; `BelegMapper` normalizes into `beleg-core`.
+- MinIO client 9 needs `com.squareup.okhttp3:okhttp-jvm` declared explicitly (okhttp 5 classes are not in the `okhttp` artifact for Maven).
+- Testcontainers 2: `org.testcontainers.postgresql.PostgreSQLContainer`; MinIO via `pgsty/minio` with `asCompatibleSubstituteFor("minio/minio")`.

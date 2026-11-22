@@ -10,6 +10,14 @@ spring:
     password: ${DB_PASSWORD:beleg}
   flyway:
     enabled: true
+  servlet:
+    multipart:
+      # Images are sent inline (base64, +33 %) to Gemini; keep uploads well below the 20 MB request limit.
+      max-file-size: 10MB
+      max-request-size: 11MB
+  mvc:
+    problemdetails:
+      enabled: true
   modulith:
     events:
       jdbc:
@@ -18,6 +26,10 @@ spring:
       republish-outstanding-events-on-restart: true
 
 beleg:
+  intake:
+    default-tenant: ${BELEG_DEFAULT_TENANT:t-01}
+  worker:
+    poll-interval-ms: ${BELEG_WORKER_POLL_INTERVAL_MS:1000}
   storage:
     endpoint: ${S3_ENDPOINT:http://localhost:9000}
     access-key: ${S3_ACCESS_KEY:minioadmin}
@@ -27,6 +39,12 @@ beleg:
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
     gemini-strong-model: ${GEMINI_STRONG_MODEL:gemini-3.8-flash}
+    media-resolution: ${GEMINI_MEDIA_RESOLUTION:MEDIUM}
+    thinking-level: ${GEMINI_THINKING_LEVEL:}
+    timeout: 90s
+    max-retries: 2
+    render-dpi: 200
+    max-pages: 3
 
 management:
   endpoints:
