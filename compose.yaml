@@ -1,0 +1,136 @@
+# Beleg-Agent local environment. Everything runs in containers; nothing is installed on the host.
+#
+#   make up        -> postgres, minio, api, worker
+#   make test      -> mvn verify inside the dev container (Testcontainers via the Docker socket)
+#
+# LLM: Gemini (cloud) only, see docs/adr/0004-cloud-only-gemini.md.
+# Host ports are bound to 127.0.0.1 and shifted (1xxxx) to avoid clashes with other local projects.
+# Inside the compose network the normal ports are used (postgres:5432, minio:9000, api:8080, worker:8081).
+
+name: beleg-agent
+
+x-app-env: &app-env
+  DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+  DB_USER: ${POSTGRES_USER}
+  DB_PASSWORD: ${POSTGRES_PASSWORD}
+  S3_ENDPOINT: http://minio:9000
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+  S3_BUCKET: ${S3_BUCKET}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GEMINI_MODEL: ${GEMINI_MODEL}
+  GEMINI_STRONG_MODEL: ${GEMINI_STRONG_MODEL}
+
+x-app: &app
+  build: .
+  image: beleg-agent/app:dev
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    minio-init:
+      condition: service_completed_successfully
+
+services:
+  # ---------- infrastructure ----------
+  postgres:
+    image: postgres:18.7-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-15432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # The official minio/minio image is no longer published on Docker Hub; pgsty/minio is a maintained fork.
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "127.0.0.1:${MINIO_API_HOST_PORT:-19000}:9000"       # S3 API
+      - "127.0.0.1:${MINIO_CONSOLE_HOST_PORT:-19001}:9001"   # web console
+
+  # Creates the document bucket with Object Lock enabled (GoBD retention). Runs once and exits.
+  minio-init:
+    image: pgsty/mc:latest
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; do
+          echo "waiting for minio..."; sleep 1;
+        done
+        mc mb --ignore-existing --with-lock "local/$$S3_BUCKET"
+        echo "bucket $$S3_BUCKET ready"
+
+  # ---------- application (same image, two roles) ----------
+  api:
+    <<: *app
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: api
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-18080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+  worker:
+    <<: *app
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: worker
+    ports:
+      - "127.0.0.1:${WORKER_HOST_PORT:-18081}:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+  # ---------- development toolbox (JDK 25 + Maven + Docker CLI) ----------
+  # Used by `make build/test/shell` and by the VS Code Dev Container.
+  dev:
+    build: .devcontainer
+    image: beleg-agent/dev:latest
+    profiles: ["dev"]
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+    environment:
+      <<: *app-env
+      # Testcontainers starts sibling containers through the host's Docker; reach them via the host gateway.
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/workspace:cached
+      - maven-repo:/root/.m2
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  postgres-data:
+  minio-data:
+  maven-repo:

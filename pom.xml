@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.2.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>dev.belegagent</groupId>
+    <artifactId>beleg-agent-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Beleg-Agent</name>
+    <description>AI agent that extracts, validates and books German receipts and invoices</description>
+
+    <modules>
+        <module>beleg-core</module>
+        <module>beleg-extraction</module>
+        <module>beleg-app</module>
+        <module>beleg-evals</module>
+    </modules>
+
+    <properties>
+        <java.version>25</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Versions verified on Maven Central on 2026-11-22 -->
+        <langchain4j.version>1.24.0</langchain4j.version>
+        <langchain4j-beta.version>1.24.0-beta34</langchain4j-beta.version>
+        <spring-modulith.version>2.2.0</spring-modulith.version>
+        <mustang.version>2.26.0</mustang.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
+        <tess4j.version>5.21.0</tess4j.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
+        <bucket4j.version>8.22.0</bucket4j.version>
+        <minio-client.version>9.0.4</minio-client.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- internal modules -->
+            <dependency>
+                <groupId>dev.belegagent</groupId>
+                <artifactId>beleg-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.belegagent</groupId>
+                <artifactId>beleg-extraction</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- BOMs -->
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-bom</artifactId>
+                <version>${langchain4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.modulith</groupId>
+                <artifactId>spring-modulith-bom</artifactId>
+                <version>${spring-modulith.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- E-invoice, PDF, OCR -->
+            <dependency>
+                <groupId>org.mustangproject</groupId>
+                <artifactId>library</artifactId>
+                <version>${mustang.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>${pdfbox.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.sourceforge.tess4j</groupId>
+                <artifactId>tess4j</artifactId>
+                <version>${tess4j.version}</version>
+            </dependency>
+
+            <!-- Storage / resilience -->
+            <dependency>
+                <groupId>io.minio</groupId>
+                <artifactId>minio</artifactId>
+                <version>${minio-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bucket4j</groupId>
+                <artifactId>bucket4j_jdk17-core</artifactId>
+                <version>${bucket4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bucket4j</groupId>
+                <artifactId>bucket4j_jdk17-postgresql</artifactId>
+                <version>${bucket4j.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

@@ -1,0 +1,23 @@
+# build
+target/
+*.class
+
+# secrets
+.env
+*.pem
+*.key
+
+# datasets (download with scripts/fetch-datasets.sh; own receipts are never published)
+data/**
+!data/README.md
+!data/*/
+!data/*/.gitkeep
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# source planning document (Persian), kept locally
+Architeckt_DOC.pdf

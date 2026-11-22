@@ -1,0 +1,3 @@
+# The worker serves no public API; the port is only for actuator health/metrics.
+server:
+  port: 8081

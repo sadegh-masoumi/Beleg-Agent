@@ -1,0 +1,22 @@
+{
+  "name": "Beleg-Agent",
+  "dockerComposeFile": ["../compose.yaml"],
+  "service": "dev",
+  "runServices": ["dev", "postgres", "minio", "minio-init"],
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "vmware.vscode-spring-boot",
+        "redhat.vscode-xml",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-containers"
+      ],
+      "settings": {
+        "java.configuration.updateBuildConfiguration": "automatic"
+      }
+    }
+  }
+}
