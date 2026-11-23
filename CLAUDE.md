@@ -33,10 +33,15 @@ From the host: API 18080, worker 18081, PostgreSQL 15432, MinIO 19000 (console 1
 Phase 0 and Phase 1 done: `POST /api/documents` (multipart, magic-byte check, SHA-256 dedup per tenant) → MinIO + `document` row →
 worker claims with `FOR UPDATE SKIP LOCKED` → `BelegExtractionService` (PDFBox render → Gemini, JSON schema) → append-only `extraction` row →
 `GET /api/documents/{id}/extraction`. No retry yet (failure = FAILED).
-Next: Phase 2, evals (ZUGFeRD trick: compare extraction with the XML embedded in the same PDF).
+Phase 2 done: `beleg-evals` (`make eval`), ground truth from `ZugferdReader` (Mustang + CII XPath), results in `docs/evals/results.md`,
+CI gate `.github/workflows/evals.yml` (needs secret `GEMINI_API_KEY`). Answers are cached per config + prompt/schema fingerprint in `eval-results/`.
+Next: Phase 3, agent and guardrails (route full-profile e-invoices to `ZugferdReader`, deterministic validator in `beleg-core`,
+self-correction with `GEMINI_STRONG_MODEL`, review queue, SKR account suggestion).
 
 ## Gotchas
 - Spring Boot 4 uses Jackson 3 (`tools.jackson.*`); annotations stay `com.fasterxml.jackson.annotation`. LangChain4j uses Jackson 2 internally.
 - LangChain4j's JSON schema has no `LocalDate`: model-facing records (`extraction.llm.Extracted*`) use strings; `BelegMapper` normalizes into `beleg-core`.
 - MinIO client 9 needs `com.squareup.okhttp3:okhttp-jvm` declared explicitly (okhttp 5 classes are not in the `okhttp` artifact for Maven).
+- Gemini free tier: gemini-3.8-flash allows 5 requests/min and 20/day; flash-lite much more. Use `--delay-ms` in evals.
+- Any change to the prompt or `Extracted*` descriptions changes the eval fingerprint: rerun `make eval` and republish.
 - Testcontainers 2: `org.testcontainers.postgresql.PostgreSQLContainer`; MinIO via `pgsty/minio` with `asCompatibleSubstituteFor("minio/minio")`.

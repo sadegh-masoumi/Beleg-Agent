@@ -45,6 +45,25 @@ Optional header `X-Tenant-Id` (default `t-01`). Uploading the same file again re
 
 First real run (gemini-3.5-flash-lite, public ZUGFeRD samples): all key fields (number, seller, VAT ID, date, net/tax/gross, line count) matched the embedded XML; ~1,370 input / ~400–460 output tokens and 3–5 s per document.
 
+## Evals
+
+Ground truth for free: each ZUGFeRD PDF carries its own invoice as XML. The model sees only the rendered page; its answer is
+compared with the XML ([full report](docs/evals/results.md)). 23 German invoices from the public ZUGFeRD corpus, single call, no self-correction yet:
+
+| Config | Key fields correct | Field accuracy | Line-item F1 | Latency p50 | Cost per 1000 docs |
+|---|---|---|---|---|---|
+| gemini-3.5-flash-lite, medium resolution | **100.0 %** | 99.5 % | 0.928 | 4.0 s | $1.86 |
+| gemini-3.5-flash-lite, low resolution | **100.0 %** | 99.5 % | 0.923 | 4.0 s | $1.77 |
+| gemini-3.1-flash-lite, medium resolution | 95.7 % | 98.8 % | 0.920 | 4.1 s | $1.14 |
+
+*Key fields* = invoice number, date, net, tax, gross (what is needed to book). Prices: paid tier, standard, 2026-11-22.
+Lessons so far: the eval found an ambiguous schema description (gross total vs. amount due on partial invoices) that was fixed;
+low resolution saves ~40 % input tokens at equal accuracy. Clean sample PDFs are the easy case: photographed receipts follow.
+
+```bash
+make eval ARGS="--max-docs 10 --configs lite35-medium"   # answers are cached; reruns only pay for new documents
+```
+
 ## Architecture
 
 See [docs/PLAN.md](docs/PLAN.md) and [docs/adr/](docs/adr/).
@@ -58,7 +77,7 @@ client ──REST──▶ api ──tx: document + outbox──▶ PostgreSQL �
 
 - [x] Phase 0: repo, multi-module Maven, Docker Compose, ADRs
 - [x] Phase 1: basic extraction (upload → MinIO + PostgreSQL → worker → Gemini → JSON)
-- [ ] Phase 2: evals (model comparison table)
+- [x] Phase 2: evals (ZUGFeRD ground truth, model comparison, CI gate in `evals.yml`)
 - [ ] Phase 3: agent and guardrails (Mustang routing, validator, self-correction, review)
 - [ ] Phase 4: async processing and scale
 - [ ] Phase 5: DATEV export, tracing, MCP server, Grafana

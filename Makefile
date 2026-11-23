@@ -2,7 +2,7 @@
 DC   := docker compose
 DEV  := $(DC) --profile dev run --rm dev
 
-.PHONY: help env up infra down clean logs ps build test shell psql rebuild gemini-check
+.PHONY: help env up infra down clean logs ps build test shell psql rebuild gemini-check datasets eval
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -45,3 +45,9 @@ rebuild: env     ## rebuild and restart api + worker after code changes
 
 gemini-check: env ## list the Gemini models your API key can use (runs in the dev container)
 	$(DEV) sh -c 'curl -fsS -H "x-goog-api-key: $$GEMINI_API_KEY" "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200" | jq -r ".models[] | select(.supportedGenerationMethods | index(\"generateContent\")) | .name"'
+
+datasets:        ## download public eval datasets into data/
+	$(DEV) scripts/fetch-datasets.sh
+
+eval: env        ## run evals, e.g. make eval ARGS="--max-docs 10 --configs lite35-medium"
+	$(DEV) sh -c 'mvn -B -ntp -q -pl beleg-evals -am package -DskipTests && java -jar beleg-evals/target/beleg-evals.jar $(ARGS)'

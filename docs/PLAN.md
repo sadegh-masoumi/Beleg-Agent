@@ -252,7 +252,10 @@ The cheapest Gemini model is cheaper than self-hosting; the main reason to self-
 Prices from the Gemini pricing page; Gemini 3.8 Flash price doubles from 1 Jan 2027. Self-hosting figures are based on GPU vendor numbers and unconfirmed.
 Batch API is 50 % cheaper but takes up to 24 h: good for nightly archive processing, not live uploads.
 
-Note: for new projects Google recommends 3.8 Flash or 3.5 Flash-Lite (input $0.03 per M tokens); 2.5 Flash is available only to existing users (deprecations). The 2.5 figures above are for comparison only; check your project's access in AI Studio before choosing.
+Note: for new projects Google recommends 3.8 Flash or 3.5 Flash-Lite; 2.5 Flash is available only to existing users (deprecations) and routes to 3.5 Flash-Lite from 1 Dec 2026. The 2.5 figures above are for comparison only.
+
+> **Correction (2026-11-22, pricing page):** 3.5 Flash-Lite costs **$0.30 input / $2.50 output** per 1M tokens (the original note said $0.03).
+> 3.1 Flash-Lite $0.25 / $1.50; 3.8 Flash $0.75 / $3.75 until 31 Dec 2026, then $1.50 / $7.50. Measured costs per document are in [evals/results.md](evals/results.md).
 
 ### Three key decisions
 1. **Tiered model routing:** cheapest model first (Flash-Lite). Only if validation fails (tax calculation, sum of positions) → stronger model. One circuit breaker per provider with fallback to the local model.

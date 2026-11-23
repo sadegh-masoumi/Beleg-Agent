@@ -13,6 +13,9 @@ data/**
 !data/*/
 !data/*/.gitkeep
 
+# eval runs and model-answer cache (published summary lives in docs/evals/)
+eval-results/
+
 # IDE / OS
 .idea/
 *.iml

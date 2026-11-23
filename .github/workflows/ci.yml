@@ -18,5 +18,4 @@ jobs:
       # Testcontainers uses the runner's Docker daemon.
       - name: Build and test
         run: mvn -B -ntp verify
-      # Phase 2: run a small eval subset against Gemini (secret GEMINI_API_KEY, public data only)
-      # and fail below the accuracy threshold.
+      # Model evals run in evals.yml (needs the GEMINI_API_KEY secret).
