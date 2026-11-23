@@ -23,5 +23,5 @@ The decision was made to keep the setup lean and use the cloud only.
 ## Other consequences
 - Evals compare Gemini models and settings (Flash-Lite vs Flash, low vs medium media resolution, with/without self-correction, image vs OCR + text) instead of cloud vs local.
 - The resilience design gains weight: rate limiter (429s), circuit breaker, retry with jitter. Without a local fallback, a provider outage means jobs wait in the queue (or go to the dead-letter queue) rather than switching models.
-- CI cannot run evals without a key: the eval subset in GitHub Actions uses the `GEMINI_API_KEY` secret and a small sample to bound cost.
+- Evals need a key: they run locally only (no CI/CD, decided 2026-11-23) with `GEMINI_API_KEY` from `.env` and a small sample to bound cost.
 - Reversible: a local model can be added later behind the same AI service interface (e.g. Docker Model Runner, which exposes an OpenAI-compatible API and uses the Mac GPU).

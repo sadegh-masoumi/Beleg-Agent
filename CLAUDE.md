@@ -28,13 +28,14 @@ From the host: API 18080, worker 18081, PostgreSQL 15432, MinIO 19000 (console 1
 - LLM = Gemini only, no local model (ADR 0004). `GEMINI_MODEL` first, `GEMINI_STRONG_MODEL` only after validation failure.
 - Never send `data/own/` (real receipts) to the Gemini free tier; real receipts need the paid tier.
 - `ModularityTests` must stay green: modules talk via events or exposed APIs only.
+- No CI/CD: tests and evals run locally only (`make test`, `make eval`). Do not add GitHub Actions or other pipelines.
 
 ## Current phase
 Phase 0 and Phase 1 done: `POST /api/documents` (multipart, magic-byte check, SHA-256 dedup per tenant) → MinIO + `document` row →
 worker claims with `FOR UPDATE SKIP LOCKED` → `BelegExtractionService` (PDFBox render → Gemini, JSON schema) → append-only `extraction` row →
 `GET /api/documents/{id}/extraction`. No retry yet (failure = FAILED).
-Phase 2 done: `beleg-evals` (`make eval`), ground truth from `ZugferdReader` (Mustang + CII XPath), results in `docs/evals/results.md`,
-CI gate `.github/workflows/evals.yml` (needs secret `GEMINI_API_KEY`). Answers are cached per config + prompt/schema fingerprint in `eval-results/`.
+Phase 2 done: `beleg-evals` (`make eval`), ground truth from `ZugferdReader` (Mustang + CII XPath), results in `docs/evals/results.md`.
+Answers are cached per config + prompt/schema fingerprint in `eval-results/`.
 Next: Phase 3, agent and guardrails (route full-profile e-invoices to `ZugferdReader`, deterministic validator in `beleg-core`,
 self-correction with `GEMINI_STRONG_MODEL`, review queue, SKR account suggestion).
 

@@ -77,7 +77,7 @@ client ──REST──▶ api ──tx: document + outbox──▶ PostgreSQL �
 
 - [x] Phase 0: repo, multi-module Maven, Docker Compose, ADRs
 - [x] Phase 1: basic extraction (upload → MinIO + PostgreSQL → worker → Gemini → JSON)
-- [x] Phase 2: evals (ZUGFeRD ground truth, model comparison, CI gate in `evals.yml`)
+- [x] Phase 2: evals (ZUGFeRD ground truth, model comparison, run locally via `make eval`)
 - [ ] Phase 3: agent and guardrails (Mustang routing, validator, self-correction, review)
 - [ ] Phase 4: async processing and scale
 - [ ] Phase 5: DATEV export, tracing, MCP server, Grafana

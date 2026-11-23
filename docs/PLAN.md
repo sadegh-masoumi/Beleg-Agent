@@ -211,7 +211,7 @@ Key finding: per a Fraunhofer benchmark on SROIE receipts, sending the image dir
 - Unit: validator and tax calculation with hand-made examples (restaurant receipt with two rates, Kleinbetragsrechnung).
 - Integration: Testcontainers with MinIO, PostgreSQL and Ollama; downloaded model cached with `commitToImage`.
 - Since LangChain4j 1.24 the AI service can be mocked without a real model, with full call recording.
-- CI: GitHub Actions runs a small eval subset with a small local model; if accuracy drops below the threshold, the build fails.
+- No CI/CD: the eval subset runs locally via `make eval` (`--min-key-accuracy` fails the run below the threshold).
 
 ## Scale and bottlenecks
 
@@ -278,7 +278,7 @@ Every model call gets a span with tokens, cost and latency, and every incoming d
 - **Malicious file:** size and MIME type limits, PDF page count check, render in a separate worker with a memory limit.
 - **Tenant isolation:** PostgreSQL row-level security with `FORCE ROW LEVEL SECURITY`, a role that is not the table owner, and `SET LOCAL` in every transaction (AWS). Separate prefix per tenant in object storage.
 - **MCP:** read-only, with a token scoped to one tenant.
-- **API keys:** never in the repo; `.env.example` and GitHub Actions secrets.
+- **API keys:** never in the repo; `.env.example` documents them, values live in `.env`.
 
 ### Reliability
 - Idempotency via content hash, retry with jitter, dead-letter for permanent failure.
@@ -291,7 +291,7 @@ Presentable after phase 2. Each phase ends with a demo-able output.
 
 0. **Phase 0, preparation (2 days):** GitHub repo, multi-module Maven, Docker Compose (PostgreSQL, MinIO, Ollama); CLAUDE.md and first ADRs (LangChain4j choice, queue choice); data collection: Softmatic receipts, ZUGFeRD samples, own receipts. **Output:** `docker compose up` with no errors.
 1. **Phase 1, basic extraction (week 1):** upload, store original in MinIO, metadata in PostgreSQL; first `Beleg` and `Position` records; LangChain4j AI service (image in, record out); two models switchable by config: Gemini Flash and a local Ollama model. **Output:** upload a receipt and see the extracted JSON.
-2. **Phase 2, evals (week 2):** run models on the datasets: per-field accuracy, latency, cost; automatic run in GitHub Actions and results table in README. **Output:** model comparison table with real numbers.
+2. **Phase 2, evals (week 2):** run models on the datasets: per-field accuracy, latency, cost; local run via `make eval` and results table in README. **Output:** model comparison table with real numbers.
 3. **Phase 3, agent and guardrails (week 3):** ZUGFeRD routing to Mustang, deterministic validation in Java; self-correction loop and human review queue, account suggestion via tool. **Output:** show how many percent self-correction adds.
 4. **Phase 4, async processing and scale (week 4):** message queue, workers, retry, idempotency, dead-letter, rate limiter for the model API; load test (e.g. 1000 documents) and measure bottlenecks. **Output:** throughput chart and bottleneck explanation in README.
 5. **Phase 5, polish (week 5):** CSV export for the accountant, tracing, MCP server, Grafana dashboard; final README with diagram, demo GIF, eval table and ADRs. **Output:** project link in CV and LinkedIn.
