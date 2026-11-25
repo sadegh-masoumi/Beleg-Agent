@@ -1,0 +1,12 @@
+A previous extraction of this document failed these deterministic checks:
+{{errors}}
+
+Previous answer:
+{{previous}}
+
+Look at the document again and return the complete extraction.
+- Correct values that were misread: digits, decimal separators, day/month order, a value taken from the wrong row or
+  column of the VAT summary, a missed or duplicated line item.
+- If the document really prints the values of the previous answer, keep them exactly as printed. A human reviews
+  remaining discrepancies.
+- Never calculate, adjust or invent values only to make the checks pass.
