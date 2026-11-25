@@ -60,6 +60,16 @@
             <artifactId>spring-modulith-starter-jdbc</artifactId>
         </dependency>
 
+        <!-- cluster-wide model rate limit, token buckets in PostgreSQL -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-postgresql</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>

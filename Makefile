@@ -2,7 +2,7 @@
 DC   := docker compose
 DEV  := $(DC) --profile dev run --rm dev
 
-.PHONY: help env up infra down clean logs ps build test shell psql rebuild gemini-check datasets eval
+.PHONY: help env up infra down clean logs ps build test shell psql rebuild gemini-check datasets eval loadtest
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -51,3 +51,6 @@ datasets:        ## download public eval datasets into data/
 
 eval: env        ## run evals, e.g. make eval ARGS="--max-docs 10 --configs lite35-medium"
 	$(DEV) sh -c 'mvn -B -ntp -q -pl beleg-evals -am package -DskipTests && java -jar beleg-evals/target/beleg-evals.jar $(ARGS)'
+
+loadtest: env    ## load test with a simulated model (own compose project), e.g. make loadtest ARGS=w1-c16
+	scripts/loadtest.sh $(ARGS)

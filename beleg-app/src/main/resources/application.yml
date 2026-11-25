@@ -8,6 +8,8 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/beleg}
     username: ${DB_USER:beleg}
     password: ${DB_PASSWORD:beleg}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
   flyway:
     enabled: true
   servlet:
@@ -29,20 +31,32 @@ beleg:
   intake:
     default-tenant: ${BELEG_DEFAULT_TENANT:t-01}
   worker:
-    poll-interval-ms: ${BELEG_WORKER_POLL_INTERVAL_MS:1000}
+    poll-interval-ms: ${BELEG_WORKER_POLL_INTERVAL_MS:500}
+    concurrency: ${BELEG_WORKER_CONCURRENCY:4}
+    lease: ${BELEG_WORKER_LEASE:5m}
+    max-attempts: ${BELEG_WORKER_MAX_ATTEMPTS:5}
+    retry-base-delay: ${BELEG_RETRY_BASE_DELAY:5s}
+    retry-max-delay: ${BELEG_RETRY_MAX_DELAY:10m}
   storage:
     endpoint: ${S3_ENDPOINT:http://localhost:9000}
     access-key: ${S3_ACCESS_KEY:minioadmin}
     secret-key: ${S3_SECRET_KEY:minioadmin}
     bucket: ${S3_BUCKET:belege}
   llm:
+    provider: ${BELEG_LLM_PROVIDER:gemini}
     gemini-api-key: ${GEMINI_API_KEY:}
     gemini-model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
     gemini-strong-model: ${GEMINI_STRONG_MODEL:gemini-3.8-flash}
     media-resolution: ${GEMINI_MEDIA_RESOLUTION:MEDIUM}
     thinking-level: ${GEMINI_THINKING_LEVEL:}
     timeout: 90s
-    max-retries: 2
+    # the queue retries with jitter and respects the rate limit; LangChain4j's in-call retries do neither
+    max-retries: ${GEMINI_MAX_RETRIES:0}
+    requests-per-minute: ${GEMINI_RPM:0}
+    strong-requests-per-minute: ${GEMINI_STRONG_RPM:0}
+    max-rate-limit-wait: 30s
+    simulated-latency: ${BELEG_SIMULATED_LATENCY:4s}
+    simulated-failure-rate: ${BELEG_SIMULATED_FAILURE_RATE:0}
     render-dpi: 200
     max-pages: 3
   processing:

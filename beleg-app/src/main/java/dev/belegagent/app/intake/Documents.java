@@ -23,7 +23,6 @@ import org.springframework.stereotype.Service;
 public class Documents {
 
     private static final Logger log = LoggerFactory.getLogger(Documents.class);
-    private static final int MAX_ERROR_LENGTH = 2000;
 
     private final JdbcClient jdbc;
     private final DocumentStorage storage;
@@ -95,36 +94,6 @@ public class Documents {
     }
 
     /**
-     * Claims the oldest waiting document for this worker. Concurrent workers skip rows locked by others,
-     * so each document is claimed exactly once.
-     */
-    public Optional<Document> claimNext() {
-        return jdbc.sql("""
-                        UPDATE document
-                           SET status = 'PROCESSING', attempts = attempts + 1, updated_at = now()
-                         WHERE id = (SELECT id FROM document
-                                      WHERE status = 'RECEIVED'
-                                      ORDER BY created_at
-                                      LIMIT 1
-                                      FOR UPDATE SKIP LOCKED)
-                        RETURNING *
-                        """)
-                .query(Document.class)
-                .optional();
-    }
-
-    /** Stores the agent's decision: {@link DocumentStatus#ACCEPTED} or {@link DocumentStatus#NEEDS_REVIEW}. */
-    public void markProcessed(UUID id, DocumentStatus status) {
-        if (status != DocumentStatus.ACCEPTED && status != DocumentStatus.NEEDS_REVIEW) {
-            throw new IllegalArgumentException("Not a processing outcome: " + status);
-        }
-        jdbc.sql("UPDATE document SET status = :status, last_error = NULL, updated_at = now() WHERE id = :id")
-                .param("id", id)
-                .param("status", status.name())
-                .update();
-    }
-
-    /**
      * Marks a reviewed document {@link DocumentStatus#APPROVED}. Conditional on a reviewable status, so two
      * concurrent reviews cannot both succeed.
      *
@@ -153,15 +122,6 @@ public class Documents {
                 .param("limit", limit)
                 .query(Document.class)
                 .list();
-    }
-
-    public void markFailed(UUID id, String error) {
-        String message = error == null ? "unknown error"
-                : error.length() > MAX_ERROR_LENGTH ? error.substring(0, MAX_ERROR_LENGTH) : error;
-        jdbc.sql("UPDATE document SET status = 'FAILED', last_error = :error, updated_at = now() WHERE id = :id")
-                .param("id", id)
-                .param("error", message)
-                .update();
     }
 
     private Optional<Document> findById(UUID id) {

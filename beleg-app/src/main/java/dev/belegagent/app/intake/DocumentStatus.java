@@ -1,7 +1,7 @@
 package dev.belegagent.app.intake;
 
 public enum DocumentStatus {
-    /** Stored, waiting for a worker. */
+    /** Stored, waiting for a worker (or for the next retry at {@code nextAttemptAt}). */
     RECEIVED,
     /** Claimed by a worker. */
     PROCESSING,
@@ -13,8 +13,10 @@ public enum DocumentStatus {
     NEEDS_REVIEW,
     /** Approved or corrected by a human. */
     APPROVED,
-    /** Extraction failed; see {@code lastError}. Retries arrive in Phase 4. */
-    FAILED;
+    /** Permanent failure (e.g. unreadable PDF, rejected request); see {@code lastError}. Not retried. */
+    FAILED,
+    /** Transient failures until the retry limit was reached; see {@code lastError}. Can be requeued. */
+    DEAD_LETTER;
 
     /** Statuses a reviewer may approve or correct. */
     public boolean reviewable() {

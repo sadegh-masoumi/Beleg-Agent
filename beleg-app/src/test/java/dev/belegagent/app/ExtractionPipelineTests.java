@@ -1,5 +1,6 @@
 package dev.belegagent.app;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.hasItem;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,7 +28,9 @@ import dev.belegagent.extraction.FileKind;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,8 +41,13 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** Worker role end to end (upload → queue → agent → result → review) with fake models. */
-@SpringBootTest(properties = "beleg.worker.poll-interval-ms=100")
+/** Worker role end to end (upload → queue → agent → result → review, retry, dead-letter) with fake models. */
+@SpringBootTest(properties = {
+        "beleg.worker.poll-interval-ms=100",
+        "beleg.worker.concurrency=4",
+        "beleg.worker.max-attempts=3",
+        "beleg.worker.retry-base-delay=50ms",
+        "beleg.worker.retry-max-delay=200ms"})
 @AutoConfigureMockMvc
 @ActiveProfiles("worker")
 @Import(TestcontainersConfiguration.class)
@@ -180,6 +188,85 @@ class ExtractionPipelineTests {
                         .andExpect(jsonPath("$.status").value("FAILED"))
                         .andExpect(jsonPath("$.lastError").value("model unavailable"))
                         .andExpect(jsonPath("$.attempts").value(1)));
+    }
+
+    @Test
+    void transientFailureIsRetriedWithBackoff() throws Exception {
+        byte[] png = DocumentApiTests.png("pipeline-retry");
+        given(primary.extract(eq(png), eq(FileKind.PNG)))
+                .willThrow(ExtractionException.retryable("HTTP 429 rate limit", null))
+                .willReturn(outcome("cheap-model", receipt("0.45")));
+
+        String id = upload(png);
+        awaitStatus(id, "ACCEPTED");
+
+        mvc.perform(get("/api/documents/{id}", id))
+                .andExpect(jsonPath("$.attempts").value(2))
+                .andExpect(jsonPath("$.lastError").doesNotExist());
+    }
+
+    @Test
+    void exhaustedRetriesGoToDeadLetterAndCanBeRequeued() throws Exception {
+        byte[] png = DocumentApiTests.png("pipeline-dead-letter");
+        given(primary.extract(eq(png), eq(FileKind.PNG)))
+                .willThrow(ExtractionException.retryable("HTTP 503 high demand", null));
+
+        String id = upload(png);
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                mvc.perform(get("/api/documents/{id}", id))
+                        .andExpect(jsonPath("$.status").value("DEAD_LETTER"))
+                        .andExpect(jsonPath("$.attempts").value(3))
+                        .andExpect(jsonPath("$.lastError").value("Gave up after 3 attempts: HTTP 503 high demand")));
+
+        given(primary.extract(eq(png), eq(FileKind.PNG))).willReturn(outcome("cheap-model", receipt("0.45")));
+        mvc.perform(post("/api/documents/{id}/requeue", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attempts").value(0));
+        awaitStatus(id, "ACCEPTED");
+        mvc.perform(post("/api/documents/{id}/requeue", id)).andExpect(status().isConflict());
+    }
+
+    @Test
+    void transientCorrectionFailureRetriesTheDocumentInsteadOfSendingItToReview() throws Exception {
+        byte[] png = DocumentApiTests.png("pipeline-correction-503");
+        given(primary.extract(eq(png), eq(FileKind.PNG))).willReturn(outcome("cheap-model", receipt("0.54")));
+        given(corrector.correct(eq(png), eq(FileKind.PNG), any(), anyList()))
+                .willThrow(ExtractionException.retryable("HTTP 503 high demand", null))
+                .willReturn(outcome("strong-model", receipt("0.45")));
+
+        String id = upload(png);
+        awaitStatus(id, "ACCEPTED");
+
+        mvc.perform(get("/api/documents/{id}", id)).andExpect(jsonPath("$.attempts").value(2));
+        mvc.perform(get("/api/documents/{id}/extraction", id)).andExpect(jsonPath("$.model").value("strong-model"));
+    }
+
+    @Test
+    void documentsRunInParallelUpToTheConcurrencyLimit() throws Exception {
+        AtomicInteger running = new AtomicInteger();
+        AtomicInteger maxRunning = new AtomicInteger();
+        List<byte[]> pngs = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            pngs.add(DocumentApiTests.png("pipeline-parallel-" + i));
+        }
+        for (byte[] png : pngs) {
+            given(primary.extract(eq(png), eq(FileKind.PNG))).willAnswer(invocation -> {
+                maxRunning.accumulateAndGet(running.incrementAndGet(), Math::max);
+                Thread.sleep(300);
+                running.decrementAndGet();
+                return outcome("cheap-model", receipt("0.45"));
+            });
+        }
+
+        List<String> ids = new ArrayList<>();
+        for (byte[] png : pngs) {
+            ids.add(upload(png));
+        }
+        for (String id : ids) {
+            awaitStatus(id, "ACCEPTED");
+        }
+
+        assertThat(maxRunning.get()).isBetween(2, 4);
     }
 
     private void awaitStatus(String id, String expected) {

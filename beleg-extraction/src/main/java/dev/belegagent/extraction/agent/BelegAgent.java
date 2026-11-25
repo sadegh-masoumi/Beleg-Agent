@@ -73,6 +73,15 @@ public final class BelegAgent {
      *                             a failing correction call only adds a note and the first attempt is kept
      */
     public AgentResult process(byte[] content, FileKind kind) {
+        return process(content, kind, true);
+    }
+
+    /**
+     * @param finalAttempt {@code false} lets a transient failure of the self-correction call propagate, so the queue
+     *                     retries the document later instead of sending it to review; on the final attempt the first
+     *                     answer is kept and the document goes to review
+     */
+    public AgentResult process(byte[] content, FileKind kind, boolean finalAttempt) {
         List<String> notes = new ArrayList<>();
         if (kind == FileKind.PDF) {
             Optional<AgentResult> eInvoice = eInvoiceRoute(content, notes);
@@ -80,7 +89,7 @@ public final class BelegAgent {
                 return eInvoice.get();
             }
         }
-        return modelRoute(content, kind, notes);
+        return modelRoute(content, kind, notes, finalAttempt);
     }
 
     private Optional<AgentResult> eInvoiceRoute(byte[] content, List<String> notes) {
@@ -102,7 +111,7 @@ public final class BelegAgent {
         return Optional.of(result(List.of(attempt), 0, notes));
     }
 
-    private AgentResult modelRoute(byte[] content, FileKind kind, List<String> notes) {
+    private AgentResult modelRoute(byte[] content, FileKind kind, List<String> notes, boolean finalAttempt) {
         List<Attempt> attempts = new ArrayList<>();
         ExtractionOutcome first = primary.extract(content, kind);
         Attempt firstAttempt = new Attempt(Source.MODEL, first, validator.validate(first.beleg()));
@@ -116,6 +125,9 @@ public final class BelegAgent {
             ExtractionOutcome second = corrector.correct(content, kind, first, firstValidation.errors());
             attempts.add(new Attempt(Source.MODEL_CORRECTION, second, validator.validate(second.beleg())));
         } catch (RuntimeException e) {
+            if (!finalAttempt && e instanceof ExtractionException ee && ee.retryable()) {
+                throw ee;
+            }
             notes.add("Self-correction failed, keeping the first attempt: " + e.getMessage());
             return result(attempts, 0, notes);
         }

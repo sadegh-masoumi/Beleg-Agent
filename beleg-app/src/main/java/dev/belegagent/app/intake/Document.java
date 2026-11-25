@@ -15,6 +15,9 @@ public record Document(
         DocumentStatus status,
         int attempts,
         String lastError,
+        OffsetDateTime nextAttemptAt,
+        String lockedBy,
+        OffsetDateTime lockedUntil,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt) {
 }

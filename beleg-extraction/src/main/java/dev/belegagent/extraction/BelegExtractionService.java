@@ -130,13 +130,17 @@ public final class BelegExtractionService implements BelegExtractor {
         try {
             result = aiService.extract(contents);
         } catch (RuntimeException e) {
-            throw new ExtractionException("Model call failed (" + modelName + "): " + e.getMessage(), e);
+            String message = "Model call failed (" + modelName + "): " + e.getMessage();
+            throw ModelFailures.isRetryable(e)
+                    ? ExtractionException.retryable(message, e)
+                    : new ExtractionException(message, e);
         }
         Duration latency = Duration.ofNanos(System.nanoTime() - start);
 
         ExtractedBeleg extracted = result.content();
         if (extracted == null) {
-            throw new ExtractionException("Model returned no structured content (" + modelName + ")");
+            // Usually a truncated or empty answer; a new call normally succeeds.
+            throw ExtractionException.retryable("Model returned no structured content (" + modelName + ")", null);
         }
         TokenUsage usage = result.tokenUsage();
         String raw = result.finalResponse() != null && result.finalResponse().aiMessage() != null

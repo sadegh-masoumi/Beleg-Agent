@@ -106,6 +106,23 @@ class BelegAgentTest {
     }
 
     @Test
+    void transientCorrectionFailureIsDeferredUnlessItIsTheFinalAttempt() {
+        BelegExtractor flaky = new FakeExtractor("strong", null) {
+            @Override
+            public ExtractionOutcome correct(byte[] content, FileKind kind, ExtractionOutcome previous, List<Finding> errors) {
+                throw ExtractionException.retryable("HTTP 503 high demand", null);
+            }
+        };
+        BelegAgent agent = agent(new FakeExtractor("cheap", receipt("6.11")), flaky, true, noEInvoice());
+
+        assertThatThrownBy(() -> agent.process(PNG, FileKind.PNG, false))
+                .isInstanceOfSatisfying(ExtractionException.class, e -> assertThat(e.retryable()).isTrue());
+        AgentResult last = agent.process(PNG, FileKind.PNG, true);
+        assertThat(last.decision()).isEqualTo(Decision.NEEDS_REVIEW);
+        assertThat(last.notes()).anyMatch(n -> n.contains("503"));
+    }
+
+    @Test
     void selfCorrectionCanBeDisabledForBaselineEvals() {
         FakeExtractor strong = new FakeExtractor("strong", receipt("1.61"));
 
@@ -191,7 +208,7 @@ class BelegAgentTest {
     }
 
     /** Returns a fixed answer; {@code null} makes every call fail. */
-    private static final class FakeExtractor implements BelegExtractor {
+    private static class FakeExtractor implements BelegExtractor {
 
         private final String model;
         private final Beleg answer;

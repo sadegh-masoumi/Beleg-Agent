@@ -23,6 +23,7 @@
         <module>beleg-extraction</module>
         <module>beleg-app</module>
         <module>beleg-evals</module>
+        <module>beleg-loadtest</module>
     </modules>
 
     <properties>
