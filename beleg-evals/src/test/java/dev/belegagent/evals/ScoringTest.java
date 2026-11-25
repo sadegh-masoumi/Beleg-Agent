@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.within;
 import dev.belegagent.core.Beleg;
 import dev.belegagent.core.DocumentKind;
 import dev.belegagent.core.Position;
+import dev.belegagent.core.TaxLine;
 import dev.belegagent.evals.Scoring.Field;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -85,6 +86,22 @@ class ScoringTest {
     private static Beleg beleg(String number, String seller, String net, String tax, String gross, List<Position> lines) {
         return new Beleg(DocumentKind.INVOICE, seller, null, null, null, null, number, LocalDate.of(2018, 3, 5), null,
                 "EUR", lines, List.of(), new BigDecimal(net), new BigDecimal(tax), new BigDecimal(gross), null, null);
+    }
+
+    @Test
+    void vatBreakdownNeedsEveryRateWithNetAndTax() {
+        List<TaxLine> truth = List.of(tax("19", "198.00", "37.62"), tax("7", "275.00", "19.25"));
+
+        assertThat(Scoring.vatBreakdownMatches(truth, List.of(tax("7.00", "275.00", "19.25"), tax("19", "198.01", "37.62"))))
+                .as("order and scale do not matter, 1 cent tolerance").isTrue();
+        assertThat(Scoring.vatBreakdownMatches(truth, List.of(tax("19", "198.00", "37.62"))))
+                .as("missing rate").isFalse();
+        assertThat(Scoring.vatBreakdownMatches(truth, List.of(tax("19", "235.62", "37.62"), tax("7", "275.00", "19.25"))))
+                .as("gross read as net").isFalse();
+    }
+
+    private static TaxLine tax(String rate, String net, String tax) {
+        return new TaxLine(new BigDecimal(rate), new BigDecimal(net), new BigDecimal(tax), null);
     }
 
     private static Position line(String description, String total) {

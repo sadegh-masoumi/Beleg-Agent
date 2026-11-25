@@ -2,6 +2,7 @@ package dev.belegagent.evals;
 
 import dev.belegagent.core.Beleg;
 import dev.belegagent.core.Position;
+import dev.belegagent.core.TaxLine;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -27,7 +28,9 @@ final class Scoring {
     static final BigDecimal TOLERANCE = new BigDecimal("0.01");
 
     enum Field {
-        INVOICE_NUMBER, ISSUE_DATE, SELLER_NAME, SELLER_VAT_ID, CURRENCY, NET_TOTAL, TAX_TOTAL, GROSS_TOTAL, AMOUNT_DUE
+        INVOICE_NUMBER, ISSUE_DATE, SELLER_NAME, SELLER_VAT_ID, CURRENCY, NET_TOTAL, TAX_TOTAL, GROSS_TOTAL, AMOUNT_DUE,
+        /** Net and tax per rate (§14 Abs. 4 Nr. 7/8 UStG, needed to book input tax per rate); all rates must match. */
+        VAT_BREAKDOWN
     }
 
     /** Fields needed to book the document; "key fields correct" means all of these are exact. */
@@ -66,6 +69,10 @@ final class Scoring {
             s.put(Field.AMOUNT_DUE, amountsMatch(truth.amountDue(), due) ? 1.0 : 0.0);
         }
 
+        if (!truth.taxLines().isEmpty()) {
+            s.put(Field.VAT_BREAKDOWN, vatBreakdownMatches(truth.taxLines(), predicted.taxLines()) ? 1.0 : 0.0);
+        }
+
         boolean keyCorrect = KEY_FIELDS.stream().allMatch(f -> !s.containsKey(f) || s.get(f) == 1.0);
         Double f1 = truth.positions().isEmpty() ? null : lineF1(truth.positions(), predicted.positions());
         return new DocumentScore(s, f1, keyCorrect);
@@ -101,6 +108,22 @@ final class Scoring {
         }
         String firstLine = predicted.strip().lines().findFirst().orElse("");
         return Math.max(anls(truth, predicted), anls(truth, firstLine));
+    }
+
+    /** Same set of rates, and for each rate net and tax within 1 cent. */
+    static boolean vatBreakdownMatches(List<TaxLine> truth, List<TaxLine> predicted) {
+        if (truth.size() != predicted.size()) {
+            return false;
+        }
+        for (TaxLine t : truth) {
+            boolean found = predicted.stream().anyMatch(p -> p.ratePercent() != null && t.ratePercent() != null
+                    && p.ratePercent().compareTo(t.ratePercent()) == 0
+                    && amountsMatch(t.net(), p.net()) && amountsMatch(t.tax(), p.tax()));
+            if (!found) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static boolean amountsMatch(BigDecimal truth, BigDecimal predicted) {

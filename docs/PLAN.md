@@ -6,6 +6,9 @@ Items marked **(verify)** were not confirmed in the original and must be checked
 > **Deviation from the original plan:** no local model. Gemini is the only LLM provider ([ADR 0004](adr/0004-cloud-only-gemini.md)).
 > Ollama, Qwen3-VL, german-ocr-3 and the local-model rows below are kept for reference only.
 >
+> **Phase 3 decisions** ([ADR 0005](adr/0005-validation-self-correction-review.md)): the account suggestion is a deterministic
+> keyword table in `beleg-core`, not an LLM tool call; review is a REST API (no UI yet); the agent's control flow is fixed Java code.
+>
 > **Phase 1 simplification:** uploads go through the API as multipart (max 10 MB) instead of presigned PUT, and the worker polls
 > the `document` table instead of an outbox-fed queue. Presigned upload, outbox events, retry and dead-letter arrive in Phase 4.
 

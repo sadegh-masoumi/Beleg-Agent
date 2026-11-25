@@ -35,11 +35,21 @@ VS Code: install *Dev Containers* and run **Reopen in Container**. You get JDK 2
 ```bash
 # upload (PDF, JPEG, PNG or WebP, max 10 MB)
 curl -s -X POST localhost:18080/api/documents -F "file=@data/zugferd-corpus/samples/EN16931_Einfach.pdf"
-# status: RECEIVED → PROCESSING → EXTRACTED | FAILED
+# status: RECEIVED → PROCESSING → ACCEPTED | NEEDS_REVIEW | FAILED   (→ APPROVED after review)
 curl -s localhost:18080/api/documents/<id>
-# extracted data
+# chosen extraction with its validation findings
 curl -s localhost:18080/api/documents/<id>/extraction
+# agent run: route, every attempt (incl. self-correction), decision, SKR03/SKR04 account suggestion
+curl -s localhost:18080/api/documents/<id>/processing
+# review queue, then approve or correct (a correction is validated; approving despite errors needs a comment)
+curl -s localhost:18080/api/review
+curl -s -X POST localhost:18080/api/documents/<id>/review -H 'Content-Type: application/json' \
+     -d '{"action":"APPROVE","reviewer":"anna","comment":"Kleinunternehmer, no VAT (§19 UStG)"}'
 ```
+
+The agent ([ADR 0005](docs/adr/0005-validation-self-correction-review.md)): full e-invoices are read from their XML (no model);
+everything else goes to `GEMINI_MODEL`, then the deterministic validator checks mandatory fields (§14 UStG / §33 UStDV), tax per
+rate and sums. On errors, the findings go back once to `GEMINI_STRONG_MODEL`; remaining errors send the document to review.
 
 Optional header `X-Tenant-Id` (default `t-01`). Uploading the same file again returns the existing document (`"duplicate": true`) and costs no model call.
 
@@ -48,7 +58,7 @@ First real run (gemini-3.5-flash-lite, public ZUGFeRD samples): all key fields (
 ## Evals
 
 Ground truth for free: each ZUGFeRD PDF carries its own invoice as XML. The model sees only the rendered page; its answer is
-compared with the XML ([full report](docs/evals/results.md)). 23 German invoices from the public ZUGFeRD corpus, single call, no self-correction yet:
+compared with the XML ([full report](docs/evals/results.md)). 23 German invoices from the public ZUGFeRD corpus, first model answer:
 
 | Config | Key fields correct | Field accuracy | Line-item F1 | Latency p50 | Cost per 1000 docs |
 |---|---|---|---|---|---|
@@ -59,6 +69,12 @@ compared with the XML ([full report](docs/evals/results.md)). 23 German invoices
 *Key fields* = invoice number, date, net, tax, gross (what is needed to book). Prices: paid tier, standard, 2026-11-22.
 Lessons so far: the eval found an ambiguous schema description (gross total vs. amount due on partial invoices) that was fixed;
 low resolution saves ~40 % input tokens at equal accuracy. Clean sample PDFs are the easy case: photographed receipts follow.
+
+**Validator and self-correction (Phase 3).** All 23 ground-truth XMLs pass the deterministic rules, so the rules do not reject correct
+invoices. On model answers the validator rejected exactly the answers with a wrong VAT breakdown per rate (net read from the wrong
+column), which key-field scoring alone did not see: 0 of 23 for 3.5 Flash-Lite at medium resolution, 2 of 23 at low resolution.
+Sending the findings back to the *same* cheap model fixed none of them (it repeated its reading), so those documents go to review;
+the stronger corrector (`gemini-3.8-flash`) returned HTTP 503 on 2026-11-23 and is still to be measured.
 
 ```bash
 make eval ARGS="--max-docs 10 --configs lite35-medium"   # answers are cached; reruns only pay for new documents
@@ -78,6 +94,6 @@ client ──REST──▶ api ──tx: document + outbox──▶ PostgreSQL �
 - [x] Phase 0: repo, multi-module Maven, Docker Compose, ADRs
 - [x] Phase 1: basic extraction (upload → MinIO + PostgreSQL → worker → Gemini → JSON)
 - [x] Phase 2: evals (ZUGFeRD ground truth, model comparison, run locally via `make eval`)
-- [ ] Phase 3: agent and guardrails (Mustang routing, validator, self-correction, review)
+- [x] Phase 3: agent and guardrails (e-invoice routing, validator, self-correction, review API, SKR account suggestion)
 - [ ] Phase 4: async processing and scale
 - [ ] Phase 5: DATEV export, tracing, MCP server, Grafana

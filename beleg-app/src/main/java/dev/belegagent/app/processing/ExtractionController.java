@@ -23,14 +23,28 @@ class ExtractionController {
         this.tenants = tenants;
     }
 
-    /** Latest extraction of a document; 404 while it is still waiting or being processed. */
+    /** The extraction the agent chose, with its validation; 404 while the document is waiting or being processed. */
     @GetMapping("/api/documents/{id}/extraction")
-    Extraction latest(
+    Extraction chosen(
             @RequestHeader(name = Tenants.HEADER, required = false) String tenantHeader,
             @PathVariable UUID id) {
+        requireDocument(tenantHeader, id);
+        return extractions.findChosen(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No extraction yet"));
+    }
+
+    /** The latest agent run: decision, account suggestion, notes and every attempt (incl. self-correction). */
+    @GetMapping("/api/documents/{id}/processing")
+    ProcessingRun processing(
+            @RequestHeader(name = Tenants.HEADER, required = false) String tenantHeader,
+            @PathVariable UUID id) {
+        requireDocument(tenantHeader, id);
+        return extractions.findLatestRun(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No processing run yet"));
+    }
+
+    private void requireDocument(String tenantHeader, UUID id) {
         documents.find(tenants.resolve(tenantHeader), id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
-        return extractions.findLatest(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No extraction yet"));
     }
 }

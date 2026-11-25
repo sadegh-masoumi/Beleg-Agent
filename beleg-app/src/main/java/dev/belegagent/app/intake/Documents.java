@@ -7,6 +7,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -112,10 +113,46 @@ public class Documents {
                 .optional();
     }
 
-    public void markExtracted(UUID id) {
-        jdbc.sql("UPDATE document SET status = 'EXTRACTED', last_error = NULL, updated_at = now() WHERE id = :id")
+    /** Stores the agent's decision: {@link DocumentStatus#ACCEPTED} or {@link DocumentStatus#NEEDS_REVIEW}. */
+    public void markProcessed(UUID id, DocumentStatus status) {
+        if (status != DocumentStatus.ACCEPTED && status != DocumentStatus.NEEDS_REVIEW) {
+            throw new IllegalArgumentException("Not a processing outcome: " + status);
+        }
+        jdbc.sql("UPDATE document SET status = :status, last_error = NULL, updated_at = now() WHERE id = :id")
                 .param("id", id)
+                .param("status", status.name())
                 .update();
+    }
+
+    /**
+     * Marks a reviewed document {@link DocumentStatus#APPROVED}. Conditional on a reviewable status, so two
+     * concurrent reviews cannot both succeed.
+     *
+     * @return {@code false} if the document was not in a reviewable status (any more)
+     */
+    public boolean markApproved(String tenantId, UUID id) {
+        return jdbc.sql("""
+                        UPDATE document SET status = 'APPROVED', updated_at = now()
+                         WHERE id = :id AND tenant_id = :tenant AND status IN ('ACCEPTED', 'NEEDS_REVIEW', 'EXTRACTED')
+                        """)
+                .param("id", id)
+                .param("tenant", tenantId)
+                .update() == 1;
+    }
+
+    /** Review queue: documents of one tenant in the given status, oldest first. */
+    public List<Document> findByStatus(String tenantId, DocumentStatus status, int limit) {
+        return jdbc.sql("""
+                        SELECT * FROM document
+                         WHERE tenant_id = :tenant AND status = :status
+                         ORDER BY created_at
+                         LIMIT :limit
+                        """)
+                .param("tenant", tenantId)
+                .param("status", status.name())
+                .param("limit", limit)
+                .query(Document.class)
+                .list();
     }
 
     public void markFailed(UUID id, String error) {

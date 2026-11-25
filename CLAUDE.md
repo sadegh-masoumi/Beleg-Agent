@@ -36,8 +36,11 @@ worker claims with `FOR UPDATE SKIP LOCKED` → `BelegExtractionService` (PDFBox
 `GET /api/documents/{id}/extraction`. No retry yet (failure = FAILED).
 Phase 2 done: `beleg-evals` (`make eval`), ground truth from `ZugferdReader` (Mustang + CII XPath), results in `docs/evals/results.md`.
 Answers are cached per config + prompt/schema fingerprint in `eval-results/`.
-Next: Phase 3, agent and guardrails (route full-profile e-invoices to `ZugferdReader`, deterministic validator in `beleg-core`,
-self-correction with `GEMINI_STRONG_MODEL`, review queue, SKR account suggestion).
+Phase 3 done (ADR 0005): `BelegAgent` (`beleg-extraction/agent`) routes full e-invoices to `ZugferdReader` (no model), else
+`GEMINI_MODEL` → `BelegValidator` (`beleg-core/validation`) → on errors one correction with `GEMINI_STRONG_MODEL` → ACCEPTED or
+NEEDS_REVIEW; `AccountSuggester` (`beleg-core/accounting`, SKR03/04 keywords). Tables `processing_run`, `extraction` (one row per attempt), `review`.
+Endpoints: `/api/documents/{id}/extraction|processing|review`, `GET /api/review`. Evals run the same agent (`--self-correct MODEL`).
+Next: Phase 4, async processing and scale (outbox events, retry with jitter, dead-letter, rate limiter, load test).
 
 ## Gotchas
 - Spring Boot 4 uses Jackson 3 (`tools.jackson.*`); annotations stay `com.fasterxml.jackson.annotation`. LangChain4j uses Jackson 2 internally.
@@ -45,4 +48,6 @@ self-correction with `GEMINI_STRONG_MODEL`, review queue, SKR account suggestion
 - MinIO client 9 needs `com.squareup.okhttp3:okhttp-jvm` declared explicitly (okhttp 5 classes are not in the `okhttp` artifact for Maven).
 - Gemini free tier: gemini-3.8-flash allows 5 requests/min and 20/day; flash-lite much more. Use `--delay-ms` in evals.
 - Any change to the prompt or `Extracted*` descriptions changes the eval fingerprint: rerun `make eval` and republish.
+  The correction prompt (`prompts/correct-beleg-user.txt`) has its own fingerprint; first-pass answers stay cached.
+- `BelegExtractor` has two methods (`extract`, `correct`): tests mock the beans `primaryExtractor` and `correctionExtractor` by name.
 - Testcontainers 2: `org.testcontainers.postgresql.PostgreSQLContainer`; MinIO via `pgsty/minio` with `asCompatibleSubstituteFor("minio/minio")`.

@@ -45,6 +45,9 @@ beleg:
     max-retries: 2
     render-dpi: 200
     max-pages: 3
+  processing:
+    self-correction: ${BELEG_SELF_CORRECTION:true}
+    chart-of-accounts: ${BELEG_CHART_OF_ACCOUNTS:SKR03}
 
 management:
   endpoints:

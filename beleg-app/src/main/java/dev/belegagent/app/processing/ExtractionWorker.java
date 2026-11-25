@@ -1,10 +1,12 @@
 package dev.belegagent.app.processing;
 
 import dev.belegagent.app.intake.Document;
+import dev.belegagent.app.intake.DocumentStatus;
 import dev.belegagent.app.intake.Documents;
-import dev.belegagent.extraction.BelegExtractor;
-import dev.belegagent.extraction.ExtractionOutcome;
 import dev.belegagent.extraction.FileKind;
+import dev.belegagent.extraction.agent.AgentResult;
+import dev.belegagent.extraction.agent.BelegAgent;
+import dev.belegagent.extraction.agent.Decision;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,8 +16,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Polls the PostgreSQL job queue and extracts each claimed document.
- * Phase 1: one document at a time per worker, no retry (a failure marks the document FAILED).
+ * Polls the PostgreSQL job queue and runs the {@link BelegAgent} on each claimed document
+ * (route → extract → validate → self-correct once → decide → suggest account).
+ * One document at a time per worker, no retry yet (a failure marks the document FAILED).
  * Retry with backoff, dead-letter, rate limiting and concurrency limits follow in Phase 4.
  */
 @Component
@@ -26,13 +29,13 @@ class ExtractionWorker {
 
     private final Documents documents;
     private final Extractions extractions;
-    private final BelegExtractor extractor;
+    private final BelegAgent agent;
     private final TransactionTemplate tx;
 
-    ExtractionWorker(Documents documents, Extractions extractions, BelegExtractor extractor, TransactionTemplate tx) {
+    ExtractionWorker(Documents documents, Extractions extractions, BelegAgent agent, TransactionTemplate tx) {
         this.documents = documents;
         this.extractions = extractions;
-        this.extractor = extractor;
+        this.agent = agent;
         this.tx = tx;
     }
 
@@ -45,19 +48,23 @@ class ExtractionWorker {
     }
 
     void process(Document document) {
-        log.info("Extracting document {} ({}, {} bytes)", document.id(), document.contentType(), document.sizeBytes());
+        log.info("Processing document {} ({}, {} bytes)", document.id(), document.contentType(), document.sizeBytes());
         try {
             FileKind kind = FileKind.fromMimeType(document.contentType())
                     .orElseThrow(() -> new IllegalStateException("Unsupported content type " + document.contentType()));
-            ExtractionOutcome outcome = extractor.extract(documents.content(document), kind);
-            tx.executeWithoutResult(status -> {
-                extractions.save(document.id(), outcome);
-                documents.markExtracted(document.id());
+            AgentResult result = agent.process(documents.content(document), kind);
+            DocumentStatus status = result.decision() == Decision.ACCEPTED
+                    ? DocumentStatus.ACCEPTED : DocumentStatus.NEEDS_REVIEW;
+            tx.executeWithoutResult(s -> {
+                extractions.saveRun(document.id(), result);
+                documents.markProcessed(document.id(), status);
             });
-            log.info("Extracted document {} with {} in {} ms (tokens in/out: {}/{})", document.id(), outcome.model(),
-                    outcome.latency().toMillis(), outcome.inputTokens(), outcome.outputTokens());
+            log.info("Document {}: {} via {} after {} attempt(s), {} error(s), account {} ({})", document.id(), status,
+                    result.chosenAttempt().outcome().model(), result.attempts().size(),
+                    result.chosenAttempt().validation().errors().size(), result.account().account(),
+                    result.account().confidence());
         } catch (RuntimeException e) {
-            log.warn("Extraction of document {} failed: {}", document.id(), e.getMessage());
+            log.warn("Processing of document {} failed: {}", document.id(), e.getMessage());
             documents.markFailed(document.id(), e.getMessage());
         }
     }

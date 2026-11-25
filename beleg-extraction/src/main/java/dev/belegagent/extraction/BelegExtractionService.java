@@ -2,6 +2,7 @@ package dev.belegagent.extraction;
 
 import static dev.langchain4j.model.chat.Capability.RESPONSE_FORMAT_JSON_SCHEMA;
 
+import dev.belegagent.core.validation.Finding;
 import dev.belegagent.extraction.llm.BelegAiService;
 import dev.belegagent.extraction.llm.BelegMapper;
 import dev.belegagent.extraction.llm.ExtractedBeleg;
@@ -16,17 +17,24 @@ import dev.langchain4j.model.googleai.GoogleAiGeminiTokenUsage;
 import dev.langchain4j.model.output.TokenUsage;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.Result;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 /**
  * Vision-model extraction: image or PDF in, {@link ExtractionOutcome} out.
  * Pure Java (no Spring) so the app and the eval harness use exactly the same code path.
  */
 public final class BelegExtractionService implements BelegExtractor {
+
+    private static final String CORRECTION_TEMPLATE = resource("/prompts/correct-beleg-user.txt");
 
     private final BelegAiService aiService;
     private final String modelName;
@@ -66,6 +74,27 @@ public final class BelegExtractionService implements BelegExtractor {
 
     @Override
     public ExtractionOutcome extract(byte[] content, FileKind kind) {
+        return call(content, kind, null);
+    }
+
+    @Override
+    public ExtractionOutcome correct(byte[] content, FileKind kind, ExtractionOutcome previous, List<Finding> errors) {
+        String findings = errors.stream()
+                .map(f -> "- " + f.code() + " (" + f.field() + "): " + f.message())
+                .collect(Collectors.joining("\n"));
+        String previousAnswer = previous.rawResponse() != null ? previous.rawResponse() : previous.beleg().toString();
+        String instruction = CORRECTION_TEMPLATE
+                .replace("{{errors}}", findings)
+                .replace("{{previous}}", previousAnswer);
+        return call(content, kind, instruction);
+    }
+
+    /** The correction instruction (template from {@code /prompts/correct-beleg-user.txt}), for eval fingerprints. */
+    public static String correctionTemplate() {
+        return CORRECTION_TEMPLATE;
+    }
+
+    private ExtractionOutcome call(byte[] content, FileKind kind, String correction) {
         List<byte[]> images;
         String imageMime;
         int totalPages;
@@ -84,6 +113,9 @@ public final class BelegExtractionService implements BelegExtractor {
         }
 
         List<Content> contents = new ArrayList<>();
+        if (correction != null) {
+            contents.add(TextContent.from(correction));
+        }
         contents.add(TextContent.from(images.size() == 1
                 ? "Extract the data from this document."
                 : "Extract the data from this document. The %d images are consecutive pages of the same document."
@@ -121,5 +153,16 @@ public final class BelegExtractionService implements BelegExtractor {
                 latency,
                 images.size(),
                 totalPages);
+    }
+
+    private static String resource(String name) {
+        try (InputStream in = BelegExtractionService.class.getResourceAsStream(name)) {
+            if (in == null) {
+                throw new IllegalStateException("Resource missing: " + name);
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }

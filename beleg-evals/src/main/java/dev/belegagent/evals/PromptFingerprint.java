@@ -1,5 +1,6 @@
 package dev.belegagent.evals;
 
+import dev.belegagent.extraction.BelegExtractionService;
 import dev.belegagent.extraction.llm.ExtractedBeleg;
 import dev.belegagent.extraction.llm.ExtractedPosition;
 import dev.belegagent.extraction.llm.ExtractedTaxLine;
@@ -32,6 +33,12 @@ final class PromptFingerprint {
             }
         }
         return ZugferdDataset.sha256(sb.toString().getBytes(StandardCharsets.UTF_8)).substring(0, 10);
+    }
+
+    /** Fingerprint of the self-correction input: the extraction fingerprint plus the correction instruction. */
+    static String computeCorrection() {
+        String input = compute() + "\n" + BelegExtractionService.correctionTemplate();
+        return ZugferdDataset.sha256(input.getBytes(StandardCharsets.UTF_8)).substring(0, 10);
     }
 
     private static String prompt() {
