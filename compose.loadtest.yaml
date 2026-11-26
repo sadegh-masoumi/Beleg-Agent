@@ -1,0 +1,26 @@
+# Load-test overlay, used only by scripts/loadtest.sh:
+#   docker compose -p beleg-loadtest -f compose.yaml -f compose.loadtest.yaml ...
+# Separate project = separate volumes (your dev database is untouched), no host ports (runs next to `make up`),
+# simulated model (no Gemini calls, no cost, no API key).
+services:
+  postgres:
+    ports: !reset []
+  minio:
+    ports: !reset []
+  api:
+    ports: !reset []
+    environment:
+      GEMINI_API_KEY: ""
+  worker:
+    ports: !reset []
+    environment:
+      GEMINI_API_KEY: ""
+      BELEG_LLM_PROVIDER: simulated
+      BELEG_SIMULATED_LATENCY: ${LT_LATENCY:-2s}
+      BELEG_SIMULATED_FAILURE_RATE: ${LT_FAILURE_RATE:-0}
+      BELEG_WORKER_CONCURRENCY: ${LT_CONCURRENCY:-16}
+      GEMINI_RPM: ${LT_RPM:-0}
+      DB_POOL_SIZE: ${LT_DB_POOL:-10}
+      BELEG_WORKER_POLL_INTERVAL_MS: "200"
+      BELEG_RETRY_BASE_DELAY: 1s
+      BELEG_RETRY_MAX_DELAY: 10s
